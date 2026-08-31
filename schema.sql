@@ -1,211 +1,177 @@
--- ============================================================================
--- Bratva Outlet V2 — Supabase Schema
--- Run this in the Supabase SQL Editor to set up all tables.
--- ============================================================================
+-- ==========================================
+-- BRATVA OUTLET V2 - SUPABASE SCHEMA
+-- ==========================================
 
--- ─── Extensions ─────────────────────────────────────────────────────────────
+-- Enable UUID extension if not exists
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-create extension if not exists "uuid-ossp";
+-- ==========================================
+-- 1. ENUMS E FUNÇÕES (TRIGGERS)
+-- ==========================================
+CREATE TYPE order_status AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
+CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed', 'refunded');
 
--- ─── Customers ──────────────────────────────────────────────────────────────
+-- Função genérica para atualizar o campo updated_at automaticamente
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
 
-create table if not exists customers (
-  id          uuid primary key default uuid_generate_v4(),
-  auth_id     uuid unique references auth.users(id) on delete set null,
-  email       text not null unique,
-  name        text not null,
-  phone       text,
-  cpf         text unique,
-  avatar_url  text,
+-- ==========================================
+-- 2. TABELAS
+-- ==========================================
 
-  -- Address fields (primary address)
-  address_street        text,
-  address_number        text,
-  address_complement    text,
-  address_neighborhood  text,
-  address_city          text,
-  address_state         text,
-  address_zip_code      text,
-
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+-- 2.1 PRODUCTS
+CREATE TABLE IF NOT EXISTS products (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    brand TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    stock INTEGER NOT NULL DEFAULT 0,
+    image_url TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index idx_customers_email   on customers (email);
-create index idx_customers_auth_id on customers (auth_id);
+CREATE TRIGGER update_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- ─── Products ───────────────────────────────────────────────────────────────
-
-create table if not exists products (
-  id                uuid primary key default uuid_generate_v4(),
-  name              text not null,
-  slug              text not null unique,
-  description       text not null default '',
-  price             numeric(10,2) not null default 0,
-  compare_at_price  numeric(10,2),
-  images            text[] not null default '{}',
-  category          text not null default 'geral',
-  brand             text not null default '',
-  sizes             text[] not null default '{}',
-  colors            text[] not null default '{}',
-  stock             integer not null default 0,
-  is_active         boolean not null default true,
-
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+-- 2.2 PRODUCT VARIANTS (Tamanhos e Cores)
+CREATE TABLE IF NOT EXISTS product_variants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    size TEXT,
+    color TEXT,
+    stock INTEGER NOT NULL DEFAULT 0,
+    sku TEXT UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index idx_products_slug      on products (slug);
-create index idx_products_category  on products (category);
-create index idx_products_is_active on products (is_active);
-
--- ─── Orders ─────────────────────────────────────────────────────────────────
-
-create type order_status as enum (
-  'pending',
-  'confirmed',
-  'processing',
-  'shipped',
-  'delivered',
-  'cancelled',
-  'refunded'
+-- 2.3 CUSTOMERS (Lincado ao Auth do Supabase)
+CREATE TABLE IF NOT EXISTS customers (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT,
+    phone TEXT,
+    document_cpf TEXT UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists orders (
-  id              uuid primary key default uuid_generate_v4(),
-  customer_id     uuid references customers(id) on delete set null,
-  status          order_status not null default 'pending',
-  items           jsonb not null default '[]',
-  subtotal        numeric(10,2) not null default 0,
-  shipping        numeric(10,2) not null default 0,
-  discount        numeric(10,2) not null default 0,
-  total           numeric(10,2) not null default 0,
-  payment_method  text,
-  tracking_code   text,
-  notes           text,
-
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+-- 2.4 ORDERS (Pedidos)
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    status order_status DEFAULT 'pending',
+    payment_status payment_status DEFAULT 'pending',
+    total_amount DECIMAL(10,2) NOT NULL,
+    shipping_address JSONB,
+    tracking_code TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index idx_orders_customer_id on orders (customer_id);
-create index idx_orders_status      on orders (status);
-create index idx_orders_created_at  on orders (created_at desc);
+CREATE TRIGGER update_orders_updated_at
+    BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- ─── Cart Items ─────────────────────────────────────────────────────────────
-
-create table if not exists cart_items (
-  id          uuid primary key default uuid_generate_v4(),
-  customer_id uuid not null references customers(id) on delete cascade,
-  product_id  uuid not null references products(id) on delete cascade,
-  quantity    integer not null default 1 check (quantity > 0),
-  size        text,
-  color       text,
-
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-
-  unique (customer_id, product_id, size, color)
+-- 2.5 ORDER ITEMS (Itens do Pedido)
+CREATE TABLE IF NOT EXISTS order_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES products(id) ON DELETE RESTRICT,
+    variant_id UUID REFERENCES product_variants(id) ON DELETE SET NULL,
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index idx_cart_items_customer_id on cart_items (customer_id);
-
--- ─── Home Sections ──────────────────────────────────────────────────────────
-
-create type section_type as enum (
-  'hero',
-  'banner',
-  'carousel',
-  'featured_products',
-  'category_grid',
-  'text_block',
-  'custom_html'
+-- 2.6 HOME SECTIONS (CMS Simples para a Homepage)
+CREATE TABLE IF NOT EXISTS home_sections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    type TEXT NOT NULL, -- Ex: 'hero', 'featured_products', 'banner'
+    content JSONB,
+    order_index INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create table if not exists home_sections (
-  id          uuid primary key default uuid_generate_v4(),
-  type        section_type not null,
-  title       text,
-  subtitle    text,
-  content     jsonb not null default '{}',
-  image_url   text,
-  link_url    text,
-  sort_order  integer not null default 0,
-  is_active   boolean not null default true,
-
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+-- 2.7 COUPONS (Cupons de Desconto - Opcional)
+CREATE TABLE IF NOT EXISTS coupons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    discount_type TEXT NOT NULL, -- 'percentage' ou 'fixed'
+    discount_value DECIMAL(10,2) NOT NULL,
+    min_order_value DECIMAL(10,2),
+    valid_until TIMESTAMPTZ,
+    usage_limit INTEGER,
+    usage_count INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-create index idx_home_sections_sort    on home_sections (sort_order);
-create index idx_home_sections_active  on home_sections (is_active);
+-- 2.8 PRODUCT REVIEWS (Avaliações - Opcional)
+CREATE TABLE IF NOT EXISTS product_reviews (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    is_approved BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- ─── Updated_at Trigger ────────────────────────────────────────────────────
+-- ==========================================
+-- 3. ÍNDICES DE PERFORMANCE
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
 
-create or replace function trigger_set_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
+-- ==========================================
+-- 4. ROW LEVEL SECURITY (RLS) POLICIES
+-- ==========================================
 
-create trigger set_updated_at before update on customers
-  for each row execute function trigger_set_updated_at();
+-- Habilitar RLS em todas as tabelas
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE home_sections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_reviews ENABLE ROW LEVEL SECURITY;
 
-create trigger set_updated_at before update on products
-  for each row execute function trigger_set_updated_at();
+-- Produtos, Variantes e Home Sections: Leitura Pública (apenas os ativos)
+CREATE POLICY "Leitura Publica Produtos" ON products FOR SELECT USING (is_active = true);
+CREATE POLICY "Leitura Publica Variantes" ON product_variants FOR SELECT USING (true);
+CREATE POLICY "Leitura Publica Home Sections" ON home_sections FOR SELECT USING (is_active = true);
+CREATE POLICY "Leitura Publica Avaliacoes" ON product_reviews FOR SELECT USING (is_approved = true);
 
-create trigger set_updated_at before update on orders
-  for each row execute function trigger_set_updated_at();
+-- Clientes: Usuário só pode ler/atualizar o próprio perfil
+CREATE POLICY "Ver proprio perfil" ON customers FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Atualizar proprio perfil" ON customers FOR UPDATE USING (auth.uid() = id);
 
-create trigger set_updated_at before update on cart_items
-  for each row execute function trigger_set_updated_at();
+-- Pedidos: Usuário só pode ler e inserir seus próprios pedidos
+CREATE POLICY "Ver proprios pedidos" ON orders FOR SELECT USING (auth.uid() = customer_id);
+CREATE POLICY "Inserir proprios pedidos" ON orders FOR INSERT WITH CHECK (auth.uid() = customer_id);
 
-create trigger set_updated_at before update on home_sections
-  for each row execute function trigger_set_updated_at();
+-- Itens de Pedido: Usuário só pode ler se o pedido for dele
+CREATE POLICY "Ver itens dos proprios pedidos" ON order_items FOR SELECT USING (
+    EXISTS (SELECT 1 FROM orders WHERE orders.id = order_items.order_id AND orders.customer_id = auth.uid())
+);
 
--- ─── RLS (Row Level Security) ───────────────────────────────────────────────
-
-alter table customers    enable row level security;
-alter table products     enable row level security;
-alter table orders       enable row level security;
-alter table cart_items   enable row level security;
-alter table home_sections enable row level security;
-
--- Products: anyone can read active products
-create policy "Products are viewable by everyone"
-  on products for select using (is_active = true);
-
--- Home sections: anyone can read active sections
-create policy "Home sections are viewable by everyone"
-  on home_sections for select using (is_active = true);
-
--- Customers: users can read/update their own profile
-create policy "Users can view own profile"
-  on customers for select using (auth.uid() = auth_id);
-
-create policy "Users can update own profile"
-  on customers for update using (auth.uid() = auth_id);
-
--- Orders: users can view their own orders
-create policy "Users can view own orders"
-  on orders for select using (
-    customer_id in (select id from customers where auth_id = auth.uid())
-  );
-
-create policy "Users can create own orders"
-  on orders for insert with check (
-    customer_id in (select id from customers where auth_id = auth.uid())
-  );
-
--- Cart items: users can manage their own cart
-create policy "Users can view own cart"
-  on cart_items for select using (
-    customer_id in (select id from customers where auth_id = auth.uid())
-  );
-
-create policy "Users can manage own cart"
-  on cart_items for all using (
-    customer_id in (select id from customers where auth_id = auth.uid())
-  );
+-- OBS: Permissões de escrita geral (Inserir produtos, gerenciar cupons, etc)
+-- Serão permitidas de forma irrestrita apenas quando usadas com a SERVICE_ROLE_KEY.
+-- Como segurança adicional, administradores acessam pelo painel gerencial usando a key de service_role no backend.
