@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import * as Select from '@radix-ui/react-select'
+import { useProducts } from '@/hooks/useProducts'
+import { useProductsStore } from '@/lib/store'
 
 // ─── Route Search Params ────────────────────────────────────────────────────
 
@@ -22,28 +24,14 @@ export const Route = createFileRoute('/produtos')({
       { title: 'Produtos — Bratva Outlet' },
       {
         name: 'description',
-        content: 'Confira todos os produtos do nosso outlet. Moda premium com até 70% OFF.',
+        content:
+          'Confira todos os produtos do nosso outlet. Moda premium com até 70% OFF.',
       },
     ],
   }),
 })
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const ALL_PRODUCTS = [
-  { id: '1', name: 'Camiseta Oversized Premium', brand: 'ESSENTIALS', price: 189.9, compare_at_price: 349.9, category: 'camisetas', sizes: ['P', 'M', 'G', 'GG'] },
-  { id: '2', name: 'Calça Cargo Streetwear', brand: 'URBAN CO.', price: 259.9, compare_at_price: 459.9, category: 'calcas', sizes: ['38', '40', '42', '44'] },
-  { id: '3', name: 'Jaqueta Corta-Vento', brand: 'STORM', price: 329.9, compare_at_price: 599.9, category: 'jaquetas', sizes: ['M', 'G', 'GG'] },
-  { id: '4', name: 'Tênis Runner Pro', brand: 'VELOCITY', price: 449.9, compare_at_price: 799.9, category: 'tenis', sizes: ['39', '40', '41', '42', '43'] },
-  { id: '5', name: 'Bermuda Tech Flex', brand: 'ESSENTIALS', price: 149.9, compare_at_price: 279.9, category: 'bermudas', sizes: ['P', 'M', 'G'] },
-  { id: '6', name: 'Camiseta Basic Fit', brand: 'URBAN CO.', price: 89.9, compare_at_price: 159.9, category: 'camisetas', sizes: ['P', 'M', 'G', 'GG', 'XG'] },
-  { id: '7', name: 'Boné Snapback Classic', brand: 'HEADZ', price: 79.9, compare_at_price: 149.9, category: 'acessorios', sizes: ['Único'] },
-  { id: '8', name: 'Calça Jogger Premium', brand: 'STORM', price: 219.9, compare_at_price: 399.9, category: 'calcas', sizes: ['P', 'M', 'G', 'GG'] },
-  { id: '9', name: 'Tênis Casual Slip-On', brand: 'VELOCITY', price: 349.9, compare_at_price: 649.9, category: 'tenis', sizes: ['38', '39', '40', '41', '42'] },
-  { id: '10', name: 'Jaqueta Puffer Inverno', brand: 'STORM', price: 489.9, compare_at_price: 899.9, category: 'jaquetas', sizes: ['M', 'G', 'GG'] },
-  { id: '11', name: 'Relógio Digital Sport', brand: 'HEADZ', price: 199.9, compare_at_price: 399.9, category: 'acessorios', sizes: ['Único'] },
-  { id: '12', name: 'Camiseta Tie-Dye Drop', brand: 'ESSENTIALS', price: 129.9, compare_at_price: 249.9, category: 'camisetas', sizes: ['P', 'M', 'G', 'GG'] },
-]
+// ─── Static Data ────────────────────────────────────────────────────────────
 
 const CATEGORIES_FILTER = [
   { value: 'all', label: 'Todas' },
@@ -68,47 +56,38 @@ function ProdutosPage() {
   const { category: searchCategory, sort: searchSort, q } = Route.useSearch()
   const navigate = Route.useNavigate()
 
-  const [selectedCategory, setSelectedCategory] = useState(searchCategory || 'all')
+  const [selectedCategory, setSelectedCategory] = useState(
+    searchCategory || 'all',
+  )
   const [selectedSort, setSelectedSort] = useState(searchSort || 'relevance')
   const [searchQuery, setSearchQuery] = useState(q || '')
 
-  const filteredProducts = useMemo(() => {
-    let result = [...ALL_PRODUCTS]
+  // ── Supabase query via custom hook ──────────────────────────────────────
+  const {
+    data: products,
+    isLoading,
+    isError,
+    error,
+  } = useProducts({
+    category: selectedCategory,
+    sort: selectedSort,
+    search: searchQuery,
+  })
 
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      result = result.filter((p) => p.category === selectedCategory)
-    }
+  // Categories from Zustand cache (dynamically extracted)
+  const cachedCategories = useProductsStore((s) => s.categories)
 
-    // Filter by search
-    if (searchQuery) {
-      const lower = searchQuery.toLowerCase()
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(lower) ||
-          p.brand.toLowerCase().includes(lower),
-      )
-    }
-
-    // Sort
-    switch (selectedSort) {
-      case 'price-asc':
-        result.sort((a, b) => a.price - b.price)
-        break
-      case 'price-desc':
-        result.sort((a, b) => b.price - a.price)
-        break
-      case 'discount':
-        result.sort((a, b) => {
-          const discA = a.compare_at_price ? 1 - a.price / a.compare_at_price : 0
-          const discB = b.compare_at_price ? 1 - b.price / b.compare_at_price : 0
-          return discB - discA
-        })
-        break
-    }
-
-    return result
-  }, [selectedCategory, selectedSort, searchQuery])
+  // Merge static categories with dynamic ones from DB
+  const dynamicCategories =
+    cachedCategories.length > 0
+      ? [
+          { value: 'all', label: 'Todas' },
+          ...cachedCategories.map((c) => ({
+            value: c,
+            label: c.charAt(0).toUpperCase() + c.slice(1),
+          })),
+        ]
+      : CATEGORIES_FILTER
 
   function handleCategoryChange(value: string) {
     setSelectedCategory(value)
@@ -136,7 +115,9 @@ function ProdutosPage() {
     <div className="mx-auto max-w-7xl px-4 py-10 lg:px-8">
       {/* ── Breadcrumb ──────────────────────────────────────────── */}
       <nav className="mb-6 text-sm text-zinc-500" aria-label="Breadcrumb">
-        <Link to="/" className="transition-colors hover:text-zinc-300">Home</Link>
+        <Link to="/" className="transition-colors hover:text-zinc-300">
+          Home
+        </Link>
         <span className="mx-2 text-zinc-700">/</span>
         <span className="text-zinc-300">Produtos</span>
       </nav>
@@ -146,14 +127,27 @@ function ProdutosPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Produtos</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            {filteredProducts.length} produto{filteredProducts.length !== 1 ? 's' : ''} encontrado{filteredProducts.length !== 1 ? 's' : ''}
+            {isLoading
+              ? 'Carregando...'
+              : `${products?.length ?? 0} produto${(products?.length ?? 0) !== 1 ? 's' : ''} encontrado${(products?.length ?? 0) !== 1 ? 's' : ''}`}
           </p>
         </div>
 
         {/* Search input */}
         <div className="relative w-full sm:w-72">
-          <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+            />
           </svg>
           <input
             id="search-products"
@@ -169,15 +163,29 @@ function ProdutosPage() {
       {/* ── Filters Bar ─────────────────────────────────────────── */}
       <div className="mb-8 flex flex-wrap items-center gap-3">
         {/* Category Filter — Radix Select */}
-        <Select.Root value={selectedCategory} onValueChange={handleCategoryChange}>
+        <Select.Root
+          value={selectedCategory}
+          onValueChange={handleCategoryChange}
+        >
           <Select.Trigger
             id="filter-category"
             className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 text-sm text-zinc-300 outline-none transition-colors hover:border-zinc-700 focus:border-brand-500 data-[placeholder]:text-zinc-500"
           >
             <Select.Value placeholder="Categoria" />
             <Select.Icon>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-zinc-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                />
               </svg>
             </Select.Icon>
           </Select.Trigger>
@@ -189,7 +197,7 @@ function ProdutosPage() {
               sideOffset={4}
             >
               <Select.Viewport className="p-1">
-                {CATEGORIES_FILTER.map((cat) => (
+                {dynamicCategories.map((cat) => (
                   <Select.Item
                     key={cat.value}
                     value={cat.value}
@@ -211,8 +219,19 @@ function ProdutosPage() {
           >
             <Select.Value placeholder="Ordenar" />
             <Select.Icon>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 text-zinc-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                />
               </svg>
             </Select.Icon>
           </Select.Trigger>
@@ -244,48 +263,138 @@ function ProdutosPage() {
             onClick={() => handleCategoryChange('all')}
             className="inline-flex items-center gap-1.5 rounded-full border border-brand-600/30 bg-brand-600/10 px-3 py-1.5 text-xs font-medium text-brand-400 transition-colors hover:bg-brand-600/20"
           >
-            {CATEGORIES_FILTER.find((c) => c.value === selectedCategory)?.label}
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            {dynamicCategories.find((c) => c.value === selectedCategory)
+              ?.label ?? selectedCategory}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         )}
       </div>
 
-      {/* ── Product Grid ────────────────────────────────────────── */}
-      {filteredProducts.length > 0 ? (
+      {/* ── Loading State ───────────────────────────────────────── */}
+      {isLoading && (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredProducts.map((product) => (
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="animate-pulse overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50"
+            >
+              <div className="aspect-square bg-zinc-800/50" />
+              <div className="space-y-3 p-4">
+                <div className="h-2 w-16 rounded bg-zinc-800" />
+                <div className="h-3 w-3/4 rounded bg-zinc-800" />
+                <div className="h-4 w-24 rounded bg-zinc-800" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Error State ─────────────────────────────────────────── */}
+      {isError && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-red-900/50 bg-red-950/20 px-6 py-20 text-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-16 w-16 text-red-500/50"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={0.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+            />
+          </svg>
+          <p className="mt-4 text-red-400">Erro ao carregar produtos</p>
+          <p className="mt-1 text-sm text-zinc-600">
+            {error instanceof Error ? error.message : 'Tente novamente mais tarde'}
+          </p>
+        </div>
+      )}
+
+      {/* ── Product Grid ────────────────────────────────────────── */}
+      {!isLoading && !isError && products && products.length > 0 && (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {products.map((product) => (
             <Link
               key={product.id}
               to="/produtos/$id"
               params={{ id: product.id }}
               className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50 transition-all hover:border-zinc-700 hover:shadow-xl hover:shadow-black/20"
             >
-              {/* Image placeholder */}
+              {/* Image */}
               <div className="relative aspect-square bg-zinc-800/50">
-                <div className="absolute inset-0 flex items-center justify-center text-zinc-700">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                  </svg>
-                </div>
+                {product.images?.[0] ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-zinc-700">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-12 w-12"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={0.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                      />
+                    </svg>
+                  </div>
+                )}
+
                 {/* Discount badge */}
                 {product.compare_at_price && (
                   <span className="absolute left-3 top-3 rounded-lg bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                    -{Math.round((1 - product.price / product.compare_at_price) * 100)}%
+                    -
+                    {Math.round(
+                      (1 - product.price / product.compare_at_price) * 100,
+                    )}
+                    %
                   </span>
                 )}
+
+                {/* Stock badge */}
+                {product.stock <= 3 && product.stock > 0 && (
+                  <span className="absolute right-3 top-3 rounded-lg bg-amber-500/90 px-2 py-0.5 text-[10px] font-bold text-white">
+                    Últimas {product.stock}!
+                  </span>
+                )}
+
                 {/* Quick sizes */}
-                <div className="absolute bottom-0 left-0 right-0 flex translate-y-full gap-1 bg-gradient-to-t from-zinc-900/90 to-transparent p-3 pt-8 transition-transform group-hover:translate-y-0">
-                  {product.sizes.map((size) => (
-                    <span
-                      key={size}
-                      className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-zinc-400"
-                    >
-                      {size}
-                    </span>
-                  ))}
-                </div>
+                {product.sizes?.length > 0 && (
+                  <div className="absolute bottom-0 left-0 right-0 flex translate-y-full gap-1 bg-gradient-to-t from-zinc-900/90 to-transparent p-3 pt-8 transition-transform group-hover:translate-y-0">
+                    {product.sizes.map((size) => (
+                      <span
+                        key={size}
+                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] font-medium text-zinc-400"
+                      >
+                        {size}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Info */}
@@ -310,11 +419,24 @@ function ProdutosPage() {
             </Link>
           ))}
         </div>
-      ) : (
-        /* Empty state */
+      )}
+
+      {/* ── Empty State ─────────────────────────────────────────── */}
+      {!isLoading && !isError && products && products.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/50 px-6 py-20 text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-zinc-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-16 w-16 text-zinc-700"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={0.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+            />
           </svg>
           <p className="mt-4 text-zinc-400">Nenhum produto encontrado</p>
           <p className="mt-1 text-sm text-zinc-600">
