@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Separator from '@radix-ui/react-separator'
 import { useCart } from '@/hooks/useCart'
+import { useAuth } from '@/hooks/useAuth'
 
 const NAV_LINKS = [
   { to: '/' as const, label: 'Home' },
@@ -13,6 +14,7 @@ const NAV_LINKS = [
 export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { getTotalItems, isHydrated } = useCart()
+  const { user, signOut } = useAuth()
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
@@ -77,6 +79,49 @@ export function Header() {
               </span>
             )}
           </Link>
+
+          <Separator.Root
+            orientation="vertical"
+            className="mx-1 hidden h-6 w-px bg-zinc-800 md:block"
+          />
+
+          {/* User Auth */}
+          <div className="hidden items-center md:flex">
+            {user ? (
+              <div className="group relative flex items-center gap-3 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:border-zinc-800 hover:bg-zinc-900/50">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600/20 text-sm font-bold text-brand-400">
+                  {user.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase()}
+                </div>
+                
+                {/* Dropdown menu simples on hover */}
+                <div className="absolute right-0 top-full mt-2 hidden w-48 origin-top-right flex-col rounded-xl border border-zinc-800 bg-zinc-950 p-2 shadow-xl group-hover:flex">
+                  <span className="block truncate px-3 py-2 text-xs text-zinc-500">
+                    {user.email}
+                  </span>
+                  <Separator.Root className="my-1 h-px bg-zinc-800" />
+                  <Link
+                    to="/admin"
+                    className="rounded-lg px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    Painel Admin
+                  </Link>
+                  <button
+                    onClick={() => signOut()}
+                    className="rounded-lg px-3 py-2 text-left text-sm text-zinc-300 transition-colors hover:bg-red-950/50 hover:text-red-400"
+                  >
+                    Sair
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-600/10 hover:text-brand-300"
+              >
+                Entrar
+              </Link>
+            )}
+          </div>
 
           {/* ── Mobile Menu (Radix Dialog) ──────────────────────────── */}
           <Dialog.Root open={mobileOpen} onOpenChange={setMobileOpen}>

@@ -7,6 +7,7 @@ import {
 import { Meta, Scripts } from '@tanstack/react-start'
 import { Header } from '@/components/common/Header'
 import { Footer } from '@/components/common/Footer'
+import { AuthProvider } from '@/hooks/useAuth'
 import appCss from '@/styles/globals.css?url'
 
 // ─── Query Client (shared across SSR + client) ─────────────────────────────
@@ -56,13 +57,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
-      <RootDocument>
-        <Header />
-        <main className="min-h-screen">
-          <Outlet />
-        </main>
-        <Footer />
-      </RootDocument>
+      <AuthProvider>
+        <RootDocument>
+          <Header />
+          <main className="min-h-screen">
+            <Outlet />
+          </main>
+          <Footer />
+        </RootDocument>
+      </AuthProvider>
     </QueryClientProvider>
   )
 }
