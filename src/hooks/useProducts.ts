@@ -59,7 +59,7 @@ async function fetchProductById(id: string): Promise<Product> {
     throw new Error(`Product not found: ${error.message}`)
   }
 
-  console.log(`[supabase] ✓ Loaded product: ${data.name}`)
+  console.log(`[supabase] ✓ Loaded product: ${(data as any).name}`)
   return data
 }
 
