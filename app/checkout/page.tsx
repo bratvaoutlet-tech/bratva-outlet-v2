@@ -37,7 +37,7 @@ export default function CheckoutPage() {
             total: getTotalPrice(),
             items: items,
             status: "pending",
-          },
+          } as any,
         ])
         .select()
         .single();
