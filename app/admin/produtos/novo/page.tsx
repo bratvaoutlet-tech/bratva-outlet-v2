@@ -9,7 +9,12 @@ export default function NovoProdutoPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    price: string;
+    category: string;
+  }>({
     name: "",
     description: "",
     price: "",
