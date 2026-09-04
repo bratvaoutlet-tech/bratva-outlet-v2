@@ -37,14 +37,16 @@ export default function NovoProdutoPage() {
     setLoading(true);
 
     try {
-      await supabase.from("products").insert([
-        {
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          category: formData.category,
-        },
-      ]);
+      await supabase
+        .from("products")
+        .insert([
+          {
+            name: formData.name,
+            description: formData.description,
+            price: parseFloat(formData.price),
+            category: formData.category,
+          } as any,
+        ]);
       router.push("/admin/produtos");
     } catch (error) {
       alert("Erro ao criar produto");
