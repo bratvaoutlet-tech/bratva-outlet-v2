@@ -38,7 +38,7 @@ export default function ProdutoPage() {
       quantity,
       size: selectedSize,
       color: selectedColor,
-    });
+    } as any);
     router.push("/carrinho");
   };
 
