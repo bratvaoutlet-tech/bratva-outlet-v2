@@ -146,7 +146,7 @@ export default function CheckoutPage() {
           </div>
           <div className="border-t pt-4 flex justify-between font-bold">
             <span>Total</span>
-            <span>R$ {getTotalPrice().toFixed(2)}</span>
+            <span>R$ {(getTotalPrice() as number).toFixed(2)}</span>
           </div>
         </div>
       </div>
