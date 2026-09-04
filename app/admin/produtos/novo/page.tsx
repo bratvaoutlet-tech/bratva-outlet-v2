@@ -37,7 +37,6 @@ export default function NovoProdutoPage() {
     setLoading(true);
 
     try {
-      // @ts-ignore
       await supabase
         .from("products")
         .insert([
@@ -46,7 +45,7 @@ export default function NovoProdutoPage() {
             description: formData.description,
             price: parseFloat(formData.price),
             category: formData.category,
-          },
+          } as any,
         ]);
       router.push("/admin/produtos");
     } catch (error) {
