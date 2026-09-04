@@ -28,6 +28,7 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
+      // @ts-ignore
       const { data: order } = await supabase
         .from("orders")
         .insert([
@@ -37,7 +38,7 @@ export default function CheckoutPage() {
             total: getTotalPrice(),
             items: items,
             status: "pending",
-          } as any,
+          },
         ])
         .select()
         .single();
