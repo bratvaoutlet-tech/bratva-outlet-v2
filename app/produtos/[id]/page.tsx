@@ -1,10 +1,8 @@
-// @ts-nocheck
 'use client';
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { useProduct } from "@/hooks/useProducts";
 import { useCart } from "@/hooks/useCart";
 
 export default function ProdutoPage() {
@@ -15,17 +13,7 @@ export default function ProdutoPage() {
   const [selectedColor, setSelectedColor] = useState("");
   const { addItem } = useCart();
 
-  const { data: product } = useQuery({
-    queryKey: ["product", params.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("products")
-        .select("*")
-        .eq("id", params.id)
-        .single();
-      return data;
-    },
-  });
+  const { data: product, isLoading } = useProduct(params.id as string);
 
   const handleAddCart = () => {
     if (!selectedSize || !selectedColor) {
@@ -43,7 +31,8 @@ export default function ProdutoPage() {
     router.push("/carrinho");
   };
 
-  if (!product) return <div className="text-center py-12">Carregando...</div>;
+  if (isLoading) return <div className="text-center py-12">Carregando...</div>;
+  if (!product) return <div className="text-center py-12">Produto não encontrado</div>;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
