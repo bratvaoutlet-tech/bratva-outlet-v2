@@ -9,8 +9,8 @@ export function useCart() {
   }, [])
 
   const items = useCartStore((s) => s.items)
-  const addToCart = useCartStore((s) => s.addToCart)
-  const removeFromCart = useCartStore((s) => s.removeFromCart)
+  const addItem = useCartStore((s) => s.addToCart)
+  const removeItem = useCartStore((s) => s.removeFromCart)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
   const clearCart = useCartStore((s) => s.clearCart)
   const getTotalPrice = useCartStore((s) => s.getTotalPrice())
@@ -18,8 +18,8 @@ export function useCart() {
 
   return {
     items,
-    addToCart,
-    removeFromCart,
+    addItem,
+    removeItem,
     updateQuantity,
     clearCart,
     getTotalPrice,
