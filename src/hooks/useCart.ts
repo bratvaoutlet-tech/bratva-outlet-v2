@@ -13,8 +13,8 @@ export function useCart() {
   const removeItem = useCartStore((s) => s.removeFromCart)
   const updateQuantity = useCartStore((s) => s.updateQuantity)
   const clearCart = useCartStore((s) => s.clearCart)
-  const getTotalPrice = useCartStore((s) => s.getTotalPrice)
-  const getTotalItems = useCartStore((s) => s.getTotalItems)
+  const getTotalPrice = () => useCartStore.getState().getTotalPrice()
+  const getTotalItems = () => useCartStore.getState().getTotalItems()
 
   return {
     items,
