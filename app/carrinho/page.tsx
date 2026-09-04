@@ -54,11 +54,11 @@ export default function CarrinhoPage() {
           <h2 className="font-bold text-lg mb-4">Resumo</h2>
           <div className="flex justify-between mb-4">
             <span>Subtotal</span>
-            <span>R$ {(getTotalPrice() as number).toFixed(2)}</span>
+            <span>R$ {getTotalPrice().toFixed(2)}</span>
           </div>
           <div className="border-t pt-4 flex justify-between font-bold mb-6">
             <span>Total</span>
-            <span>R$ {(getTotalPrice() as number).toFixed(2)}</span>
+            <span>R$ {getTotalPrice().toFixed(2)}</span>
           </div>
           <Link
             href="/checkout"
